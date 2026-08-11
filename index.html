@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>余韻 YOIN — 試聴室</title>
+<meta name="description" content="架空のオーディオブランド「余韻」の試聴室を、スクロールで進む一続きの3D空間として構築したデモです。">
+<style>
+  :root{
+    --ink:#0a0908;
+    --umber:#16130f;
+    --wood:#2a241d;
+    --amber:#ffb057;
+    --amber-dim:#c8935a;
+    --bone:#e8e4dc;
+    --bone-dim:#8c877d;
+    --cold:#6d8f9c;
+    --rule:rgba(232,228,220,.16);
+    --sans:"Helvetica Neue",Helvetica,Arial,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    --mincho:"Yu Mincho","YuMincho","Hiragino Mincho ProN","MS PMincho",serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--ink);color:var(--bone);
+    font-family:var(--sans);-webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  #world{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
+
+  /* ---- fallback: shown when WebGL is unavailable ---------------------- */
+  #fallback{
+    position:fixed;inset:0;z-index:1;display:none;
+    background:
+      radial-gradient(120% 80% at 50% 62%, #241c12 0%, #0f0d0a 55%, #070605 100%);
+  }
+  #fallback[data-on="1"]{display:block}
+  #fallback .fb-note{
+    position:absolute;left:0;right:0;bottom:6vh;text-align:center;
+    font-size:12px;letter-spacing:.16em;color:var(--bone-dim);padding:0 24px;
+  }
+
+  /* ---- fixed interface ------------------------------------------------ */
+  .shell{position:relative;z-index:2}
+  header{
+    position:fixed;top:0;left:0;right:0;z-index:5;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:22px clamp(18px,4vw,52px);
+    mix-blend-mode:normal;pointer-events:none;
+  }
+  header a,header nav{pointer-events:auto}
+  .brand{
+    font-size:13px;letter-spacing:.42em;text-transform:uppercase;
+    color:var(--bone);text-decoration:none;font-weight:500;
+  }
+  .brand span{color:var(--amber-dim)}
+  nav ul{display:flex;gap:clamp(14px,2.4vw,30px);list-style:none;margin:0;padding:0}
+  nav a{
+    font-size:10px;letter-spacing:.28em;text-transform:uppercase;
+    color:var(--bone-dim);text-decoration:none;padding:6px 0;
+    border-bottom:1px solid transparent;transition:color .35s,border-color .35s;
+  }
+  nav a:hover,nav a:focus-visible{color:var(--bone)}
+  nav a[aria-current="true"]{color:var(--amber);border-bottom-color:var(--amber)}
+
+  /* chapter rail */
+  .rail{
+    position:fixed;right:clamp(14px,2.6vw,34px);top:50%;transform:translateY(-50%);
+    z-index:5;display:flex;flex-direction:column;gap:14px;align-items:flex-end;
+  }
+  .rail button{
+    appearance:none;background:none;border:0;padding:4px 0 4px 22px;cursor:pointer;
+    display:flex;align-items:center;gap:9px;
+    font:400 9px/1 var(--sans);letter-spacing:.24em;color:var(--bone-dim);
+  }
+  .rail button i{display:block;width:20px;height:1px;background:var(--rule);transition:width .4s,background .4s}
+  .rail button[aria-current="true"]{color:var(--bone)}
+  .rail button[aria-current="true"] i{width:36px;background:var(--amber)}
+  .rail button:focus-visible{outline:1px solid var(--amber);outline-offset:3px}
+
+  /* ---- chapters ------------------------------------------------------- */
+  main{position:relative;z-index:2}
+  .chapter{
+    min-height:100vh;min-height:100dvh;
+    display:flex;align-items:center;
+    padding:14vh clamp(20px,7vw,120px) 14vh;
+  }
+  .copy{max-width:min(620px,52vw)}
+  .eyebrow{
+    display:flex;align-items:center;gap:14px;
+    font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--amber-dim);
+    margin:0 0 22px;
+  }
+  .eyebrow::after{content:"";flex:1 1 auto;height:1px;background:var(--rule);max-width:90px}
+  h1,h2{
+    font-weight:400;margin:0 0 26px;
+    font-size:clamp(38px,7.4vw,92px);line-height:.98;letter-spacing:-.022em;
+  }
+  h1 .w,h2 .w{display:inline-block;overflow:hidden;vertical-align:bottom}
+  h1 .w>i,h2 .w>i{
+    display:inline-block;font-style:normal;
+    transform:translateY(105%);opacity:0;
+    transition:transform .82s cubic-bezier(.16,.84,.3,1),opacity .82s;
+  }
+  .chapter[data-in="1"] h1 .w>i,.chapter[data-in="1"] h2 .w>i{transform:translateY(0);opacity:1}
+  .lede{
+    font-size:clamp(13px,1.15vw,15px);line-height:2;color:var(--bone-dim);
+    max-width:44ch;margin:0 0 30px;
+    opacity:0;transform:translateY(14px);
+    transition:opacity .9s .34s,transform .9s .34s;
+  }
+  .chapter[data-in="1"] .lede{opacity:1;transform:none}
+  .spec{
+    list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:0;
+    border-top:1px solid var(--rule);
+    opacity:0;transform:translateY(14px);
+    transition:opacity .9s .5s,transform .9s .5s;
+  }
+  .chapter[data-in="1"] .spec{opacity:1;transform:none}
+  .spec li{
+    flex:1 1 120px;padding:14px 16px 14px 0;border-bottom:1px solid var(--rule);
+  }
+  .spec b{display:block;font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--bone-dim);font-weight:400;margin-bottom:7px}
+  .spec span{font-size:15px;letter-spacing:.02em;color:var(--bone)}
+
+  /* vertical Japanese display type */
+  .vert{
+    position:fixed;z-index:3;pointer-events:none;
+    writing-mode:vertical-rl;text-orientation:upright;
+    font-family:var(--mincho);
+    font-size:clamp(30px,5.4vw,74px);line-height:1.16;letter-spacing:.14em;
+    color:var(--bone);opacity:0;
+    transition:opacity 1.1s;
+    text-shadow:0 0 34px rgba(0,0,0,.85);
+  }
+  .vert[data-on="1"]{opacity:.9}
+  .vert.v-a{right:clamp(58px,7vw,120px);top:16vh}
+  .vert.v-b{right:clamp(58px,7vw,120px);bottom:11vh;font-size:clamp(22px,3.2vw,44px);color:var(--amber-dim);opacity:0}
+  .vert.v-b[data-on="1"]{opacity:.82}
+  .vert.v-c{right:clamp(58px,7vw,120px);top:15vh;font-size:clamp(26px,4.2vw,58px);color:var(--amber);opacity:0}
+  .vert.v-c[data-on="1"]{opacity:.75}
+
+  footer{
+    position:relative;z-index:2;
+    padding:12vh clamp(20px,7vw,120px) 8vh;
+    border-top:1px solid var(--rule);
+    background:linear-gradient(180deg,rgba(10,9,8,0) 0%,rgba(10,9,8,.92) 26%,#0a0908 100%);
+  }
+  .manifesto{
+    font-size:clamp(18px,2.4vw,30px);line-height:1.62;font-weight:400;
+    max-width:24ch;margin:0 0 42px;letter-spacing:-.01em;
+  }
+  .colophon{display:flex;flex-wrap:wrap;gap:34px 60px;font-size:11px;line-height:1.9;color:var(--bone-dim);letter-spacing:.06em}
+  .colophon h3{font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:var(--bone);margin:0 0 8px;font-weight:400}
+  .colophon a{color:var(--amber-dim)}
+  .colophon a:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
+  .disclaim{margin-top:44px;font-size:10px;letter-spacing:.1em;color:#5d584f;max-width:60ch;line-height:1.9}
+
+  /* scrim keeps copy readable while the world changes behind it */
+  .scrim{
+    position:fixed;inset:0;z-index:1;pointer-events:none;
+    background:linear-gradient(100deg,rgba(6,5,4,.86) 0%,rgba(6,5,4,.52) 34%,rgba(6,5,4,0) 62%);
+  }
+
+  @media (max-width:860px){
+    .copy{max-width:none}
+    .vert.v-a{font-size:clamp(26px,7vw,44px);right:18px;top:11vh}
+    .vert.v-b{display:none}
+    .rail{display:none}
+    /* On mobile the copy sits at the TOP, so the scrim has to be dark there
+       and clear below — otherwise the darkest part of the page covers the
+       only area where the 3D world is still visible. */
+    .scrim{background:linear-gradient(180deg,rgba(6,5,4,.90) 0%,rgba(6,5,4,.86) 44%,rgba(6,5,4,.34) 72%,rgba(6,5,4,.05) 100%)}
+    .chapter{padding-top:18vh}
+  }
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    h1 .w>i,h2 .w>i,.lede,.spec{transition:none;transform:none;opacity:1}
+    .vert{transition:none}
+  }
+  .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+</style>
+</head>
+<body>
+
+<canvas id="world" aria-hidden="true"></canvas>
+<div id="fallback" aria-hidden="true">
+  <p class="fb-note">3D表示を利用できない環境のため、静止した背景を表示しています。内容は下記のとおりです。</p>
+</div>
+<div class="scrim" aria-hidden="true"></div>
+
+<p class="vert v-a" aria-hidden="true" data-vert="0">余韻</p>
+<p class="vert v-b" aria-hidden="true" data-vert="1">鳴り止んだ後</p>
+<p class="vert v-c" aria-hidden="true" data-vert="2">まだ冷めない</p>
+
+<header>
+  <a class="brand" href="#top">YOIN<span>.</span></a>
+  <nav aria-label="章">
+    <ul>
+      <li><a href="#ch-room" data-nav="0">試聴室</a></li>
+      <li><a href="#ch-amp" data-nav="1">機構</a></li>
+      <li><a href="#ch-afterglow" data-nav="2">余韻</a></li>
+      <li><a href="#colophon">概要</a></li>
+    </ul>
+  </nav>
+</header>
+
+<div class="rail" role="group" aria-label="章の移動">
+  <button type="button" data-rail="0"><i></i>01</button>
+  <button type="button" data-rail="1"><i></i>02</button>
+  <button type="button" data-rail="2"><i></i>03</button>
+</div>
+
+<div class="shell" id="top">
+<main>
+
+  <section class="chapter" id="ch-room" data-chapter="0" aria-labelledby="h-room">
+    <div class="copy">
+      <p class="eyebrow">Chapter 01 — 試聴室</p>
+      <h1 id="h-room" data-split aria-label="Where the sound stops">Where the sound stops</h1>
+      <p class="lede">
+        余韻は、鳴っている間ではなく、鳴り止んだ後に残る。
+        この部屋は、その数百ミリ秒のために設計されている。
+        壁の吸音、床の質量、機器の間隔——すべてが、消えていく音を邪魔しないためにある。
+      </p>
+      <ul class="spec">
+        <li><b>Room</b><span>3.2 × 4.6 m</span></li>
+        <li><b>RT60</b><span>0.28 s</span></li>
+        <li><b>Noise floor</b><span>NC-15</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="chapter" id="ch-amp" data-chapter="1" aria-labelledby="h-amp">
+    <div class="copy">
+      <p class="eyebrow">Chapter 02 — 機構</p>
+      <h2 id="h-amp" data-split aria-label="Heat before signal">Heat before signal</h2>
+      <p class="lede">
+        真空管は、電源を入れてから本来の音になるまでに時間がかかる。
+        待たされることが仕様に含まれている機械は、いまはもう少ない。
+        この待ち時間は欠点ではなく、聴く姿勢を作るための時間だと考えている。
+      </p>
+      <ul class="spec">
+        <li><b>Output</b><span>8 W / ch</span></li>
+        <li><b>Tubes</b><span>300B × 2</span></li>
+        <li><b>Warm-up</b><span>約 90 s</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- No spec table here. The closing chapter changes its rhythm as well as
+       its composition, so it does not read as the same beat with new words. -->
+  <section class="chapter" id="ch-afterglow" data-chapter="2" aria-labelledby="h-afterglow">
+    <div class="copy">
+      <p class="eyebrow">Chapter 03 — 余韻</p>
+      <h2 id="h-afterglow" data-split aria-label="After the last note">After the last note</h2>
+      <p class="lede">
+        灯を落としても、真空管はしばらく冷めない。
+        音が止まってから機械が静かになるまでの数分間が、この部屋でいちばん長い。
+        ブランドの名前は、そこから取っている。
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer id="colophon">
+  <p class="manifesto">音の仕事は、最後の一音が消えたところで終わる。</p>
+  <div class="colophon">
+    <div>
+      <h3>About this page</h3>
+      架空のオーディオブランド「余韻」のための<br>
+      スクロール連動 3D デモです。<br>
+      実在の企業・製品とは関係ありません。
+    </div>
+    <div>
+      <h3>Build</h3>
+      Three.js r185 / 単一HTML<br>
+      フレームワーク・ビルド工程なし<br>
+      3Dモデル読み込みなし（全て手続き生成）
+    </div>
+    <div>
+      <h3>Contact</h3>
+      <a href="https://github.com/higetuno-crypto">github.com/higetuno-crypto</a>
+    </div>
+  </div>
+  <p class="disclaim">
+    このページに登場するブランド名・製品・仕様はすべて架空のものです。
+    3Dの形状はコード内で生成しており、外部の3Dモデルファイルは一切読み込んでいません。
+  </p>
+</footer>
+</div>
+
+<script type="module">
+/* ===================================================================
+   余韻 YOIN — one persistent Three.js world, conducted by native scroll.
+   No models, no textures on disk: every surface is generated in code.
+   =================================================================== */
+
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- chapter ledger ---------------------------------------- */
+const CHAPTERS = [
+  {
+    id: "room",
+    camera: {
+      position: [-1.30, 1.08, 1.10], target: [0.00, 0.62, -2.42], fov: 38,
+      // aimed ABOVE the subject so it sits low in the frame, clear of the copy
+      mobile: { position: [-0.82, 1.10, 1.30], target: [0.38, 1.32, -2.42], fov: 56 }
+    },
+    world: { key: 2.30, cold: 24, down: 11, wash: 19, tube: 0.42, fog: 0.062, exposure: 1.05, bloom: 0.42 }
+  },
+  {
+    id: "amp",
+    camera: {
+      position: [-0.36, 0.88, -1.02], target: [0.02, 0.585, -2.44], fov: 30,
+      mobile: { position: [-0.26, 0.96, -0.78], target: [0.02, 0.860, -2.44], fov: 40 }
+    },
+    world: { key: 1.20, cold: 10, down: 5, wash: 5, tube: 0.55, fog: 0.100, exposure: 0.80, bloom: 0.40 }
+  },
+  {
+    // The payoff: the room's lights fall away and only the valves, still
+    // cooling, are left. This is what the brand name means, so the chapter
+    // changes composition, light AND DOM rhythm — not just its copy.
+    id: "afterglow",
+    camera: {
+      position: [-0.88, 0.90, 1.66], target: [0.26, 0.56, -2.42], fov: 33,
+      mobile: { position: [-0.58, 0.96, 2.05], target: [0.32, 1.10, -2.42], fov: 48 }
+    },
+    world: { key: 0.08, cold: 3.5, down: 0, wash: 0, tube: 0.85, fog: 0.150, exposure: 1.60, bloom: 1.15 }
+  }
+];
+
+/* ---------- DOM story (works with or without WebGL) ---------------- */
+const sections = [...document.querySelectorAll(".chapter")];
+const navLinks = [...document.querySelectorAll("[data-nav]")];
+const railBtns = [...document.querySelectorAll("[data-rail]")];
+const verts    = [...document.querySelectorAll("[data-vert]")];
+
+for (const h of document.querySelectorAll("[data-split]")) {
+  const words = h.textContent.trim().split(/\s+/);
+  h.textContent = "";
+  const holder = document.createElement("span");
+  holder.setAttribute("aria-hidden", "true");
+  words.forEach((word, i) => {
+    const w = document.createElement("span");
+    w.className = "w";
+    const inner = document.createElement("i");
+    inner.textContent = word;
+    inner.style.transitionDelay = (i * 72) + "ms";
+    w.appendChild(inner);
+    holder.appendChild(w);
+    if (i < words.length - 1) holder.appendChild(document.createTextNode(" "));
+  });
+  h.appendChild(holder);
+}
+
+railBtns.forEach((b, i) => b.addEventListener("click", () => {
+  sections[i].scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+}));
+
+/* ---------- scroll conductor --------------------------------------
+   exact  : reproducible story state — drives UI, nav, ownership
+   smooth : damped render state — drives camera and visual blending
+   ------------------------------------------------------------------ */
+const rig = { exact: 0, smooth: 0, index: 0, direction: 1 };
+let anchors = [];
+
+function measure() {
+  anchors = sections.map(s => {
+    const r = s.getBoundingClientRect();
+    return r.top + window.scrollY + r.height / 2;
+  });
+}
+
+function progressFromScroll() {
+  if (anchors.length < 2) return 0;
+  const y = window.scrollY + window.innerHeight / 2;
+  if (y <= anchors[0]) return 0;
+  const last = anchors.length - 1;
+  if (y >= anchors[last]) return last;
+  for (let i = 0; i < last; i++) {
+    if (y >= anchors[i] && y < anchors[i + 1]) {
+      return i + (y - anchors[i]) / (anchors[i + 1] - anchors[i]);
+    }
+  }
+  return last;
+}
+
+function damp(current, target, lambda, dt) {
+  return current + (target - current) * (1 - Math.exp(-lambda * dt));
+}
+
+let activeChapter = -1;
+function syncDom() {
+  const idx = Math.max(0, Math.min(CHAPTERS.length - 1, Math.round(rig.exact)));
+  if (idx === activeChapter) return;
+  activeChapter = idx;
+  rig.index = idx;
+  sections.forEach((s, i) => s.setAttribute("data-in", i <= idx ? "1" : "0"));
+  navLinks.forEach((a, i) => a.setAttribute("aria-current", String(i === idx)));
+  railBtns.forEach((b, i) => b.setAttribute("aria-current", String(i === idx)));
+  verts.forEach((v, i) => v.setAttribute("data-on", i === idx ? "1" : "0"));
+}
+
+function onScroll() {
+  const next = progressFromScroll();
+  rig.direction = next >= rig.exact ? 1 : -1;
+  rig.exact = next;
+  syncDom();
+  requestStill();          // no-op unless reduced motion owns the loop
+}
+
+addEventListener("scroll", onScroll, { passive: true });
+addEventListener("pageshow", () => { measure(); onScroll(); });
+addEventListener("hashchange", () => { measure(); onScroll(); });
+
+/* ===================================================================
+   3D world
+   =================================================================== */
+let THREE = null, renderer = null, running = false;
+
+function failWorld(reason) {
+  document.getElementById("fallback").setAttribute("data-on", "1");
+  document.getElementById("world").style.display = "none";
+  if (reason) console.warn("[yoin] 3D disabled:", reason);
+}
+
+/* ---------- procedural textures (2D canvas, no files) -------------- */
+function makeCanvas(size) {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  return [c, c.getContext("2d")];
+}
+function rnd(seed) { // deterministic — the same world every load
+  let s = seed >>> 0;
+  return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+}
+
+function woodTexture() {
+  const [c, g] = makeCanvas(512), r = rnd(7);
+  g.fillStyle = "#493b2c"; g.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 300; i++) {                 // grain lines along one axis
+    const y = r() * 512, w = 0.4 + r() * 2.2, a = 0.05 + r() * 0.16;
+    g.strokeStyle = r() < .5 ? `rgba(32,24,16,${a})` : `rgba(146,116,80,${a * .7})`;
+    g.lineWidth = w; g.beginPath();
+    for (let x = 0; x <= 512; x += 16) {
+      const yy = y + Math.sin((x + i * 37) * 0.012) * 7 + Math.sin(x * 0.05) * 2;
+      x === 0 ? g.moveTo(x, yy) : g.lineTo(x, yy);
+    }
+    g.stroke();
+  }
+  for (let i = 0; i < 4200; i++) {                // pore speckle
+    g.fillStyle = `rgba(12,8,5,${r() * .16})`;
+    g.fillRect(r() * 512, r() * 512, 1, 1 + r());
+  }
+  return c;
+}
+
+function brushedTexture() {
+  const [c, g] = makeCanvas(512), r = rnd(19);
+  g.fillStyle = "#3a3a3c"; g.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 5200; i++) {                // fine horizontal streaks
+    const y = r() * 512, len = 40 + r() * 300, x = r() * 512;
+    const v = r(); g.strokeStyle = v < .5 ? `rgba(255,255,255,${r() * .07})` : `rgba(0,0,0,${r() * .09})`;
+    g.lineWidth = 0.5 + r(); g.beginPath(); g.moveTo(x, y); g.lineTo(x + len, y + (r() - .5) * .6); g.stroke();
+  }
+  return c;
+}
+
+function coneTexture() {
+  const [c, g] = makeCanvas(256), r = rnd(31);
+  g.fillStyle = "#2b2521"; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 900; i++) {                 // paper-pulp fibres
+    g.strokeStyle = `rgba(${150 + r() * 70},${132 + r() * 58},${116 + r() * 48},${r() * .18})`;
+    g.lineWidth = .5 + r() * .9;
+    const x = r() * 256, y = r() * 256, a = r() * Math.PI * 2, l = 3 + r() * 13;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+  }
+  return c;
+}
+
+function floorTexture() {
+  const [c, g] = makeCanvas(512), r = rnd(53);
+  g.fillStyle = "#14110e"; g.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 22000; i++) {               // dense low-pile weave
+    const v = r();
+    g.fillStyle = v < .5 ? `rgba(0,0,0,${r() * .5})` : `rgba(84,72,58,${r() * .12})`;
+    g.fillRect(r() * 512, r() * 512, 1, 1);
+  }
+  return c;
+}
+
+function panelTexture() {
+  const [c, g] = makeCanvas(512), r = rnd(71);
+  g.fillStyle = "#3a322a"; g.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 15000; i++) {               // acoustic felt
+    g.fillStyle = `rgba(${r() * 70},${r() * 60},${r() * 48},${r() * .5})`;
+    g.fillRect(r() * 512, r() * 512, 1, 1);
+  }
+  for (let x = 0; x < 512; x += 32) {             // vertical slat reveals
+    g.fillStyle = "rgba(0,0,0,.5)"; g.fillRect(x, 0, 3, 512);
+    g.fillStyle = "rgba(186,160,126,.09)"; g.fillRect(x + 3, 0, 1, 512);
+  }
+  return c;
+}
+
+/* ---------- post-processing shaders -------------------------------- */
+const QUAD_VERT = `
+varying vec2 vUv;
+void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
+`;
+
+const BRIGHT_FRAG = `
+uniform sampler2D tDiffuse; uniform float threshold; uniform float knee;
+varying vec2 vUv;
+void main(){
+  vec3 c = texture2D(tDiffuse, vUv).rgb;
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  float s = smoothstep(threshold, threshold + knee, l);
+  gl_FragColor = vec4(c * s, 1.0);
+}
+`;
+
+const BLUR_FRAG = `
+uniform sampler2D tDiffuse; uniform vec2 dir;
+varying vec2 vUv;
+void main(){
+  vec3 s = vec3(0.0);
+  s += texture2D(tDiffuse, vUv + dir * -4.0).rgb * 0.0162;
+  s += texture2D(tDiffuse, vUv + dir * -3.0).rgb * 0.0540;
+  s += texture2D(tDiffuse, vUv + dir * -2.0).rgb * 0.1216;
+  s += texture2D(tDiffuse, vUv + dir * -1.0).rgb * 0.1946;
+  s += texture2D(tDiffuse, vUv               ).rgb * 0.2270;
+  s += texture2D(tDiffuse, vUv + dir *  1.0).rgb * 0.1946;
+  s += texture2D(tDiffuse, vUv + dir *  2.0).rgb * 0.1216;
+  s += texture2D(tDiffuse, vUv + dir *  3.0).rgb * 0.0540;
+  s += texture2D(tDiffuse, vUv + dir *  4.0).rgb * 0.0162;
+  gl_FragColor = vec4(s, 1.0);
+}
+`;
+
+/* Composite owns the whole finish: bloom add, exposure, ACES, vignette,
+   grain, then the sRGB encode. Nothing upstream is tone mapped, so the
+   unprocessed frame is composed first — exactly as the reference asks. */
+const COMPOSITE_FRAG = `
+uniform sampler2D tScene; uniform sampler2D tBloom;
+uniform float bloomStrength, exposure, grain, vignette, time;
+varying vec2 vUv;
+
+vec3 aces(vec3 x){
+  const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+void main(){
+  vec3 col = texture2D(tScene, vUv).rgb;
+  col += texture2D(tBloom, vUv).rgb * bloomStrength;
+  col *= exposure;
+  col = aces(col);
+
+  vec2 d = vUv - 0.5;
+  col *= clamp(1.0 - dot(d, d) * vignette, 0.0, 1.0);
+
+  col += (hash(vUv * vec2(1927.0, 1081.0) + time) - 0.5) * grain;
+
+  col = clamp(col, 0.0, 1.0);
+  vec3 lo = col * 12.92;
+  vec3 hi = 1.055 * pow(col, vec3(1.0 / 2.4)) - 0.055;
+  gl_FragColor = vec4(mix(lo, hi, step(vec3(0.0031308), col)), 1.0);
+}
+`;
+
+/* ---------- build ---------------------------------------------------- */
+let scene, camera, canvas;
+let sceneRT, brightRT, blurRT;
+let brightMat, blurMat, compositeMat, quadScene, quadCam;
+let keyLight, coldLight, downLight, washLight, tubeLights = [], tubeMats = [], filamentMats = [];
+let posCurve, tgtCurve;
+let dpr = 1, isMobile = false;
+let stats = { triangles: 0, calls: 0 };
+
+async function boot() {
+  try {
+    THREE = await import("./vendor/three.module.min.js");
+  } catch (e) { return failWorld("module load failed: " + e.message); }
+
+  canvas = document.getElementById("world");
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" });
+  } catch (e) { return failWorld("no WebGL context"); }
+  if (!renderer.getContext()) return failWorld("no WebGL context");
+
+  isMobile = matchMedia("(max-width: 860px)").matches;
+  dpr = Math.min(devicePixelRatio || 1, isMobile ? 1.35 : 1.75);
+
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NoToneMapping;   // the composite pass owns the grade
+  renderer.setPixelRatio(dpr);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;   // PCFSoft is deprecated in r185
+
+  scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x0b0d12, CHAPTERS[0].world.fog);
+  camera = new THREE.PerspectiveCamera(CHAPTERS[0].camera.fov, 1, 0.05, 60);
+
+  buildWorld();
+  buildPost();
+  buildCurves();
+  resize();
+
+  addEventListener("resize", onResize);
+  document.addEventListener("visibilitychange", () => {
+    running = !document.hidden;
+    if (running) { last = performance.now(); requestAnimationFrame(frame); }
+  });
+  canvas.addEventListener("webglcontextlost", (e) => {
+    e.preventDefault(); running = false;
+    failWorld("context lost");
+  });
+
+  measure();
+  onScroll();
+  rig.smooth = rig.exact;
+  applyState(rig.exact, true);
+
+  running = true;
+  last = performance.now();
+  requestAnimationFrame(frame);
+}
+
+function texture(canvasEl, repeatX, repeatY, srgb) {
+  const t = new THREE.CanvasTexture(canvasEl);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeatX, repeatY);
+  t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  return t;
+}
+
+/* A metal surface reflects its surroundings; with no environment it renders
+   black however bright the lights are. This builds a tiny equirectangular
+   environment in code — a warm ceiling bounce, a dark floor, and a hot patch
+   where the wall wash sits — so brushed steel, chrome and brass read. */
+function buildEnvironment() {
+  const c = document.createElement("canvas");
+  c.width = 256; c.height = 128;
+  const g = c.getContext("2d");
+  const grd = g.createLinearGradient(0, 0, 0, 128);
+  grd.addColorStop(0.00, "#4a3c2c");
+  grd.addColorStop(0.42, "#1d1713");
+  grd.addColorStop(1.00, "#080706");
+  g.fillStyle = grd; g.fillRect(0, 0, 256, 128);
+  const pool = g.createRadialGradient(158, 74, 3, 158, 74, 62);
+  pool.addColorStop(0, "rgba(255,168,96,.62)");
+  pool.addColorStop(1, "rgba(255,168,96,0)");
+  g.fillStyle = pool; g.fillRect(0, 0, 256, 128);
+  const cold = g.createRadialGradient(34, 54, 2, 34, 54, 46);
+  cold.addColorStop(0, "rgba(132,180,215,.52)");
+  cold.addColorStop(1, "rgba(132,180,215,0)");
+  g.fillStyle = cold; g.fillRect(0, 0, 256, 128);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  pmrem.compileEquirectangularShader();
+  scene.environment = pmrem.fromEquirectangular(tex).texture;
+  scene.environmentIntensity = 0.42;
+  pmrem.dispose();
+  tex.dispose();
+}
+
+function buildWorld() {
+  buildEnvironment();
+  const worldRoot = new THREE.Group(); worldRoot.name = "world";
+  const environment = new THREE.Group(); environment.name = "environment";
+  const landmarks   = new THREE.Group(); landmarks.name = "landmarks";
+  const atmosphere  = new THREE.Group(); atmosphere.name = "atmosphere";
+  worldRoot.add(environment, landmarks, atmosphere);
+  scene.add(worldRoot);
+
+  const woodMap  = texture(woodTexture(), 1, 1, true);
+  const brushMap = texture(brushedTexture(), 1, 1, true);
+  const coneMap  = texture(coneTexture(), 1, 1, true);
+  const floorMap = texture(floorTexture(), 6, 8, true);
+  const panelMap = texture(panelTexture(), 4, 1, true);
+
+  const M = {
+    floor:  new THREE.MeshStandardMaterial({ map: floorMap, roughness: 0.96, metalness: 0.0 }),
+    wall:   new THREE.MeshStandardMaterial({ map: panelMap, roughness: 0.94, metalness: 0.0 }),
+    ceil:   new THREE.MeshStandardMaterial({ color: 0x0d0b09, roughness: 1.0, metalness: 0.0 }),
+    wood:   new THREE.MeshStandardMaterial({ map: woodMap, roughness: 0.52, metalness: 0.0 }),
+    woodDk: new THREE.MeshStandardMaterial({ map: woodMap, color: 0x6b5c48, roughness: 0.44, metalness: 0.0 }),
+    metal:  new THREE.MeshStandardMaterial({ map: brushMap, roughness: 0.34, metalness: 0.92 }),
+    dark:   new THREE.MeshStandardMaterial({ color: 0x0e0c0a, roughness: 0.8, metalness: 0.1 }),
+    cone:   new THREE.MeshStandardMaterial({ map: coneMap, roughness: 0.86, metalness: 0.0 }),
+    rubber: new THREE.MeshStandardMaterial({ color: 0x0b0a09, roughness: 0.62, metalness: 0.0 }),
+    chrome: new THREE.MeshStandardMaterial({ color: 0xcfd2d6, roughness: 0.18, metalness: 1.0 }),
+    brass:  new THREE.MeshStandardMaterial({ color: 0xb08d52, roughness: 0.3, metalness: 1.0 })
+  };
+
+  const box = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  const cyl = (rt, rb, h, seg, mat) => new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat);
+
+  /* ---- room shell: real thickness, no paper-thin planes ---- */
+  const RW = 2.05, RH = 2.46, RZ0 = -3.1, RZ1 = 3.4, RD = RZ1 - RZ0, CZ = (RZ0 + RZ1) / 2;
+
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(RW * 2, RD), M.floor);
+  floor.rotation.x = -Math.PI / 2; floor.position.z = CZ; floor.receiveShadow = true;
+  environment.add(floor);
+
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(RW * 2, RD), M.ceil);
+  ceiling.rotation.x = Math.PI / 2; ceiling.position.set(0, RH, CZ);
+  environment.add(ceiling);
+
+  const back = box(RW * 2, RH, 0.18, M.wall);
+  back.position.set(0, RH / 2, RZ0 - 0.09); back.receiveShadow = true;
+  environment.add(back);
+
+  for (const sx of [-1, 1]) {
+    const side = box(0.18, RH, RD, M.wall);
+    side.position.set(sx * (RW + 0.09), RH / 2, CZ); side.receiveShadow = true;
+    environment.add(side);
+    // skirting gives the wall/floor junction a contact edge
+    const skirt = box(0.05, 0.10, RD, M.woodDk);
+    skirt.position.set(sx * (RW - 0.025), 0.05, CZ);
+    environment.add(skirt);
+  }
+  const skirtBack = box(RW * 2, 0.10, 0.05, M.woodDk);
+  skirtBack.position.set(0, 0.05, RZ0 + 0.025);
+  environment.add(skirtBack);
+
+  /* The cold source is a door left ajar behind the camera: only its
+     spill is in frame. An emissive bar drawn on the wall read as a UI
+     element rather than as light, so the emitter stays off-screen. */
+
+  /* ---- floorstanding speaker ------------------------------------ */
+  function speaker(x, z) {
+    const g = new THREE.Group();
+    const CW = 0.24, CH = 1.06, CD = 0.31;
+
+    const carcass = box(CW, CH, CD, M.wood);
+    carcass.position.y = CH / 2 + 0.035;
+    carcass.castShadow = true; carcass.receiveShadow = true;
+    g.add(carcass);
+
+    // baffle stands proud of the carcass — a real reveal, not a decal
+    const baffle = box(CW + 0.012, CH - 0.02, 0.022, M.dark);
+    baffle.position.set(0, CH / 2 + 0.035, CD / 2 + 0.008);
+    baffle.castShadow = true;
+    g.add(baffle);
+
+    const topCap = box(CW + 0.018, 0.014, CD + 0.018, M.woodDk);
+    topCap.position.y = CH + 0.042; topCap.castShadow = true;
+    g.add(topCap);
+
+    function driver(y, radius, coneDepth) {
+      const d = new THREE.Group();
+      const basket = cyl(radius + 0.014, radius + 0.014, 0.012, 28, M.dark);
+      basket.rotation.x = Math.PI / 2; basket.position.z = 0.004;
+      d.add(basket);
+      const surround = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.011, 8, 30), M.rubber);
+      d.add(surround);
+      const c = new THREE.Mesh(new THREE.ConeGeometry(radius, coneDepth, 30, 1, true), M.cone);
+      c.rotation.x = -Math.PI / 2; c.position.z = -coneDepth / 2;
+      d.add(c);
+      const dust = new THREE.Mesh(new THREE.SphereGeometry(radius * 0.3, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.cone);
+      dust.rotation.x = Math.PI / 2;
+      d.add(dust);
+      if (radius > 0.04) {                   // bolt heads on the bass drivers only
+        for (let i = 0; i < 4; i++) {
+          const b = cyl(0.0055, 0.0055, 0.004, 6, M.chrome);
+          b.rotation.x = Math.PI / 2;
+          const a = Math.PI / 4 + i * Math.PI / 2;
+          b.position.set(Math.cos(a) * (radius + 0.02), Math.sin(a) * (radius + 0.02), 0.008);
+          d.add(b);
+        }
+      }
+      d.position.set(0, y, CD / 2 + 0.019);
+      return d;
+    }
+    g.add(driver(0.34, 0.078, 0.05));
+    g.add(driver(0.60, 0.078, 0.05));
+    const tw = driver(0.82, 0.026, 0.014);
+    g.add(tw);
+
+    const port = cyl(0.031, 0.031, 0.05, 20, M.dark);
+    port.rotation.x = Math.PI / 2; port.position.set(0, 0.20, CD / 2 + 0.006);
+    g.add(port);
+
+    const badge = box(0.05, 0.012, 0.003, M.brass);
+    badge.position.set(0, 0.98, CD / 2 + 0.021);
+    g.add(badge);
+
+    // plinth + spikes: the contact points that stop it floating
+    const plinth = box(CW + 0.09, 0.022, CD + 0.09, M.woodDk);
+    plinth.position.y = 0.024; plinth.castShadow = true; plinth.receiveShadow = true;
+    g.add(plinth);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const spike = cyl(0.006, 0.011, 0.026, 10, M.chrome);
+      spike.position.set(sx * (CW / 2 + 0.028), 0.013, sz * (CD / 2 + 0.028));
+      g.add(spike);
+    }
+
+    g.position.set(x, 0, z);
+    g.rotation.y = -x * 0.14;   // toed in toward the listening seat
+    return g;
+  }
+  landmarks.add(speaker(-1.16, -2.30));
+  landmarks.add(speaker( 1.16, -2.30));
+
+  /* ---- low rack + valve amplifier -------------------------------- */
+  const rack = new THREE.Group();
+  // deliberately darker than the speaker cabinets: the rack is a stand,
+  // not the subject, and a bright shelf out-competes the amplifier on it
+  const rackWood = new THREE.MeshStandardMaterial({ map: M.wood.map, color: 0x4a4038, roughness: 0.62, metalness: 0.0 });
+  const shelfTop = box(1.16, 0.036, 0.44, rackWood);
+  shelfTop.position.y = 0.46; shelfTop.castShadow = true; shelfTop.receiveShadow = true;
+  rack.add(shelfTop);
+  const shelfLow = box(1.10, 0.026, 0.40, rackWood);
+  shelfLow.position.y = 0.18; shelfLow.receiveShadow = true;
+  rack.add(shelfLow);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const leg = box(0.036, 0.46, 0.036, M.woodDk);
+    leg.position.set(sx * 0.53, 0.23, sz * 0.19); leg.castShadow = true;
+    rack.add(leg);
+  }
+  rack.position.set(0, 0, -2.42);
+  landmarks.add(rack);
+
+  const amp = new THREE.Group();
+  const chassis = box(0.46, 0.052, 0.32, M.metal);
+  chassis.position.y = 0.026; chassis.castShadow = true; chassis.receiveShadow = true;
+  amp.add(chassis);
+  const faceplate = box(0.47, 0.056, 0.014, M.metal);
+  faceplate.position.set(0, 0.028, 0.16); faceplate.castShadow = true;
+  amp.add(faceplate);
+
+  for (const sx of [-1, 1]) {                       // transformer cans
+    const can = box(0.10, 0.085, 0.115, M.dark);
+    can.position.set(sx * 0.155, 0.094, -0.10); can.castShadow = true;
+    amp.add(can);
+    const capTop = box(0.108, 0.008, 0.123, M.metal);
+    capTop.position.set(sx * 0.155, 0.140, -0.10);
+    amp.add(capTop);
+  }
+  const choke = cyl(0.045, 0.045, 0.075, 20, M.dark);
+  choke.position.set(0, 0.089, -0.115); choke.castShadow = true;
+  amp.add(choke);
+
+  /* A valve is mostly dark metal inside clear glass, with one small hot
+     filament. Building it as a glowing cylinder — and putting the point
+     light inside the envelope, where inverse-square blows the inner wall
+     out — reads as a candle instead. The light sits clear of the glass. */
+  for (const sx of [-1, 1]) for (const [dz, r, h] of [[0.03, 0.031, 0.115], [-0.02, 0.021, 0.075]]) {
+    const y0 = 0.068, X = sx * 0.115;
+
+    const base = cyl(r + 0.005, r + 0.007, 0.018, 20, M.dark);
+    base.position.set(X, 0.061, dz);
+    amp.add(base);
+    // (the valve's base pins are omitted: they sit under the socket and are
+    //  never visible from any authored camera, but cost 8 draw calls each)
+
+    const plate = box(r * 1.10, h * 0.44, r * 0.92, M.dark);
+    plate.position.set(X, y0 + h * 0.50, dz);
+    amp.add(plate);
+    const getter = cyl(r * 0.55, r * 0.55, 0.004, 12, M.chrome);   // the mirror ring at the top
+    getter.position.set(X, y0 + h * 0.86, dz);
+    amp.add(getter);
+
+    const filMat = new THREE.MeshBasicMaterial({ color: 0xffa445, transparent: true, opacity: 0.7 });
+    filamentMats.push(filMat);
+    const fil = cyl(r * 0.10, r * 0.10, h * 0.38, 6, filMat);
+    fil.position.set(X, y0 + h * 0.30, dz);
+    fil.renderOrder = 1;
+    amp.add(fil);
+
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: 0xcbbba4, roughness: 0.05, metalness: 0.0,
+      transparent: true, opacity: 0.17, depthWrite: false,
+      emissive: new THREE.Color(0xff8c2e), emissiveIntensity: 0.10
+    });
+    tubeMats.push(glassMat);
+    const glass = cyl(r, r * 0.94, h, 20, glassMat);
+    glass.position.set(X, y0 + h / 2, dz);
+    glass.renderOrder = 3;
+    amp.add(glass);
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(r * 0.94, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), glassMat);
+    dome.position.set(X, y0 + h, dz);
+    dome.renderOrder = 3;
+    amp.add(dome);
+
+    // decay 1.5, not 2: a physically exact falloff puts ~100x the irradiance
+    // on the chassis 0.1 m away and the close chapter blows out to white
+    const pl = new THREE.PointLight(0xff9330, 1.0, 2.4, 1.5);
+    pl.position.set(X, y0 + h + 0.045, dz);
+    tubeLights.push(pl);
+    amp.add(pl);
+  }
+
+  for (const sx of [-1, 1]) {                       // knobs, with a pointer notch
+    const k = cyl(0.021, 0.021, 0.017, 24, M.chrome);
+    k.rotation.x = Math.PI / 2; k.position.set(sx * 0.175, 0.030, 0.172);
+    amp.add(k);
+    const notch = box(0.0035, 0.012, 0.004, M.dark);
+    notch.position.set(sx * 0.175, 0.030 + 0.013, 0.180);
+    amp.add(notch);
+  }
+  amp.position.set(0, 0.478, -2.42);
+  landmarks.add(amp);
+
+  /* ---- medium-scale detail --------------------------------------
+     Large silhouettes and small accents were both present; the middle
+     was missing, which is what made the room read as a diagram. Cable
+     runs are the strongest single cue that a room is actually used. */
+  function cable(points, radius, mat) {
+    const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)), false, "catmullrom", 0.4);
+    // no castShadow: the runs lie on the floor, so their shadows land
+    // underneath them and cost two extra draw calls each to be invisible
+    return new THREE.Mesh(new THREE.TubeGeometry(curve, 30, radius, 6, false), mat);
+  }
+  for (const sx of [-1, 1]) {
+    landmarks.add(cable([
+      [sx * 0.20, 0.495, -2.56],   // amp binding posts
+      [sx * 0.34, 0.30, -2.62],
+      [sx * 0.42, 0.018, -2.58],   // reaches the floor
+      [sx * 0.86, 0.014, -2.44],   // runs along it
+      [sx * 1.10, 0.052, -2.46]    // up to the cabinet terminal
+    ], 0.0062, M.rubber));
+  }
+  landmarks.add(cable([
+    [0.30, 0.480, -2.58], [0.46, 0.24, -2.66], [0.52, 0.015, -2.70], [0.95, 0.012, -2.92]
+  ], 0.0055, M.rubber));
+
+  // a horizontal batten breaks the wall's vertical slats, which otherwise
+  // repeat all the way across and read as corduroy
+  const batten = box(RW * 2, 0.052, 0.028, M.woodDk);
+  batten.position.set(0, 0.92, RZ0 + 0.015);
+  batten.castShadow = true;
+  environment.add(batten);
+
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(2.9, 1.9), new THREE.MeshStandardMaterial({
+    map: texture(floorTexture(), 3, 2, true), color: 0x6b5f4e, roughness: 0.98, metalness: 0
+  }));
+  rug.rotation.x = -Math.PI / 2; rug.position.set(0.05, 0.009, -1.95);
+  rug.receiveShadow = true;
+  environment.add(rug);
+
+  // Records on the lower shelf, instanced: nine separate meshes cost nine
+  // draw calls in the main pass and nine more in every shadow pass, which
+  // is a poor trade for something this small. One InstancedMesh, no shadow
+  // (they sit inside a shelf that is already in shadow).
+  {
+    const N = 9;
+    // sized to clear the shelf above: the lower shelf top sits at 0.193
+    // and the upper shelf's underside at 0.442
+    const recs = new THREE.InstancedMesh(new THREE.BoxGeometry(0.006, 0.23, 0.24), M.dark, N);
+    const mtx = new THREE.Matrix4(), quat = new THREE.Quaternion();
+    const eul = new THREE.Euler(), pos = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+    const tint = new THREE.Color();
+    for (let i = 0; i < N; i++) {
+      eul.set(0, 0, 0.03 + i * 0.004);
+      quat.setFromEuler(eul);
+      pos.set(-0.36 + i * 0.0075, 0.308, -2.44);
+      mtx.compose(pos, quat, one);
+      recs.setMatrixAt(i, mtx);
+      recs.setColorAt(i, tint.setHex(i % 3 === 0 ? 0x6b5c48 : 0x201c19));
+    }
+    recs.instanceMatrix.needsUpdate = true;
+    recs.instanceColor.needsUpdate = true;
+    landmarks.add(recs);
+  }
+
+  /* ---- listening seat: gives the room a human scale --------------- */
+  const seat = new THREE.Group();
+  const cushion = box(0.56, 0.10, 0.52, M.rubber);
+  cushion.position.y = 0.36; cushion.castShadow = true;
+  seat.add(cushion);
+  const backRest = box(0.56, 0.42, 0.08, M.rubber);
+  backRest.position.set(0, 0.60, -0.22); backRest.castShadow = true;
+  seat.add(backRest);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const leg = cyl(0.012, 0.010, 0.31, 8, M.woodDk);
+    leg.position.set(sx * 0.23, 0.155, sz * 0.21);
+    seat.add(leg);
+  }
+  seat.position.set(0, 0, 1.15);
+  landmarks.add(seat);
+
+  /* ---- dust: the only particles, and they earn their place -------- */
+  const DUST = isMobile ? 260 : 620;
+  const dustGeo = new THREE.BufferGeometry();
+  const dp = new Float32Array(DUST * 3);
+  const dr = rnd(101);
+  for (let i = 0; i < DUST; i++) {
+    dp[i * 3]     = (dr() - 0.5) * RW * 1.7;
+    dp[i * 3 + 1] = dr() * (RH - 0.2) + 0.1;
+    dp[i * 3 + 2] = RZ0 + dr() * RD;
+  }
+  dustGeo.setAttribute("position", new THREE.BufferAttribute(dp, 3));
+  const dustMat = new THREE.PointsMaterial({
+    color: 0xd8c4a4, size: 0.006, sizeAttenuation: true,
+    transparent: true, opacity: 0.34, depthWrite: false
+  });
+  const dust = new THREE.Points(dustGeo, dustMat);
+  dust.name = "dust";
+  atmosphere.add(dust);
+
+  /* ---- lighting -----------------------------------------------------
+     One warm key, one cold raking spill from the door, one downlight
+     over the rack, and the valves as practicals. Intensities are in
+     physical units (r165+): point/spot fall off with distance squared,
+     so these numbers are much larger than the pre-r155 equivalents.
+     ------------------------------------------------------------------ */
+  // The ambient is deliberately COLD and the practicals are warm. Every
+  // shadow then reads blue against amber light, which is what stops the
+  // whole frame collapsing into one brown hue.
+  scene.add(new THREE.HemisphereLight(0x33465c, 0x0a0c10, 0.55));
+
+  keyLight = new THREE.DirectionalLight(0xffd2a0, 2.30);
+  keyLight.position.set(2.6, 3.1, 2.4);
+  keyLight.target.position.set(0, 0.65, -2.35);
+  scene.add(keyLight.target);
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(isMobile ? 1024 : 2048, isMobile ? 1024 : 2048);
+  keyLight.shadow.camera.near = 0.5; keyLight.shadow.camera.far = 14;
+  keyLight.shadow.camera.left = -3.2; keyLight.shadow.camera.right = 3.2;
+  keyLight.shadow.camera.top = 3.2; keyLight.shadow.camera.bottom = -1.6;
+  keyLight.shadow.bias = -0.0012;
+  keyLight.shadow.normalBias = 0.022;
+  scene.add(keyLight);
+
+  // the door left ajar: a cold wedge raking across the floor
+  coldLight = new THREE.SpotLight(0x8fc0dd, 34, 9.0, Math.PI * 0.21, 0.58, 1.7);
+  coldLight.position.set(RW - 0.06, 1.92, 0.95);
+  coldLight.target.position.set(0.72, 0.0, -2.55);
+  scene.add(coldLight.target);
+  scene.add(coldLight);
+
+  // a single warm downlight over the rack — this is what makes the
+  // speakers read as objects instead of silhouettes in a void
+  downLight = new THREE.SpotLight(0xffbe80, 16, 5.2, Math.PI * 0.36, 0.78, 2);
+  downLight.position.set(0, RH - 0.10, -1.85);
+  downLight.target.position.set(0, 0, -2.45);
+  downLight.castShadow = true;
+  downLight.shadow.mapSize.set(isMobile ? 512 : 1024, isMobile ? 512 : 1024);
+  downLight.shadow.camera.near = 0.3; downLight.shadow.camera.far = 6;
+  downLight.shadow.bias = -0.0015;
+  downLight.shadow.normalBias = 0.02;
+  scene.add(downLight.target);
+  scene.add(downLight);
+
+  // wall wash behind the speakers. This is the compositional move: the
+  // back wall carries the light, the cabinets read as silhouettes against
+  // it, and the room gains a depth plane the fog can separate.
+  washLight = new THREE.SpotLight(0xffc08a, 19, 5.6, Math.PI * 0.24, 0.95, 2);
+  washLight.position.set(0.86, RH - 0.34, -1.60);
+  washLight.target.position.set(0.86, 0.78, -3.15);
+  scene.add(washLight.target);
+  scene.add(washLight);
+}
+
+function buildPost() {
+  const type = renderer.capabilities.isWebGL2 ? THREE.HalfFloatType : THREE.UnsignedByteType;
+  const opts = { type, colorSpace: THREE.NoColorSpace, depthBuffer: true, stencilBuffer: false };
+  sceneRT = new THREE.WebGLRenderTarget(2, 2, opts);
+  brightRT = new THREE.WebGLRenderTarget(2, 2, { type, colorSpace: THREE.NoColorSpace, depthBuffer: false, stencilBuffer: false });
+  blurRT   = new THREE.WebGLRenderTarget(2, 2, { type, colorSpace: THREE.NoColorSpace, depthBuffer: false, stencilBuffer: false });
+  for (const rt of [sceneRT, brightRT, blurRT]) {
+    rt.texture.minFilter = THREE.LinearFilter;
+    rt.texture.magFilter = THREE.LinearFilter;
+    rt.texture.generateMipmaps = false;
+  }
+
+  brightMat = new THREE.ShaderMaterial({
+    vertexShader: QUAD_VERT, fragmentShader: BRIGHT_FRAG,
+    uniforms: { tDiffuse: { value: null }, threshold: { value: 0.90 }, knee: { value: 0.26 } },
+    depthTest: false, depthWrite: false
+  });
+  blurMat = new THREE.ShaderMaterial({
+    vertexShader: QUAD_VERT, fragmentShader: BLUR_FRAG,
+    uniforms: { tDiffuse: { value: null }, dir: { value: new THREE.Vector2() } },
+    depthTest: false, depthWrite: false
+  });
+  compositeMat = new THREE.ShaderMaterial({
+    vertexShader: QUAD_VERT, fragmentShader: COMPOSITE_FRAG,
+    uniforms: {
+      tScene: { value: null }, tBloom: { value: null },
+      bloomStrength: { value: 0.62 }, exposure: { value: 1.06 },
+      grain: { value: 0.055 }, vignette: { value: 1.05 }, time: { value: 0 }
+    },
+    depthTest: false, depthWrite: false
+  });
+
+  quadScene = new THREE.Scene();
+  quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  quadScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), brightMat));
+}
+
+function buildCurves() {
+  const pick = c => isMobile && c.camera.mobile ? c.camera.mobile : c.camera;
+  const pts = CHAPTERS.map(c => new THREE.Vector3(...pick(c).position));
+  const tgs = CHAPTERS.map(c => new THREE.Vector3(...pick(c).target));
+  posCurve = new THREE.CatmullRomCurve3(pts, false, "centripetal", 0.5);
+  tgtCurve = new THREE.CatmullRomCurve3(tgs, false, "centripetal", 0.5);
+}
+
+/* ---------- responsive ---------------------------------------------- */
+let lastW = 0, lastH = 0;
+function onResize() {
+  const w = innerWidth, h = innerHeight;
+  const wasMobile = isMobile;
+  isMobile = matchMedia("(max-width: 860px)").matches;
+  // Ignore the height-only churn from a mobile URL bar; rebuild on width change.
+  if (w === lastW && Math.abs(h - lastH) < 120 && wasMobile === isMobile) { measure(); return; }
+  if (wasMobile !== isMobile) buildCurves();
+  resize();
+  measure();
+  onScroll();
+}
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  lastW = w; lastH = h;
+  dpr = Math.min(devicePixelRatio || 1, isMobile ? 1.35 : 1.75);
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+
+  const pw = Math.max(2, Math.floor(w * dpr)), ph = Math.max(2, Math.floor(h * dpr));
+  sceneRT.setSize(pw, ph);
+  const bw = Math.max(2, Math.floor(pw / 2)), bh = Math.max(2, Math.floor(ph / 2));
+  brightRT.setSize(bw, bh);
+  blurRT.setSize(bw, bh);
+}
+
+/* ---------- world-state channels ------------------------------------ */
+const lerp = (a, b, t) => a + (b - a) * t;
+
+function segmentState(p) {
+  const last = CHAPTERS.length - 1;
+  const i = Math.max(0, Math.min(last - 1, Math.floor(p)));
+  const t = Math.max(0, Math.min(1, p - i));
+  return { a: CHAPTERS[i].world, b: CHAPTERS[Math.min(last, i + 1)].world, t };
+}
+
+function applyState(p, immediate) {
+  const { a, b, t } = segmentState(p);
+  const last = CHAPTERS.length - 1;
+  const u = last > 0 ? Math.max(0, Math.min(1, p / last)) : 0;
+
+  let pos = posCurve.getPoint(u);
+  let tgt = tgtCurve.getPoint(u);
+
+  const i = Math.max(0, Math.min(last - 1, Math.floor(p)));
+  const pickFov = c => (isMobile && c.camera.mobile ? c.camera.mobile : c.camera).fov;
+  let fov = lerp(pickFov(CHAPTERS[i]), pickFov(CHAPTERS[Math.min(last, i + 1)]), t);
+
+  // Tall viewport: step back along the view direction and open the lens,
+  // rather than accepting an arbitrary centre crop.
+  const tall = Math.max(0, innerHeight / innerWidth - 1.15);
+  if (tall > 0) {
+    const dir = new THREE.Vector3().subVectors(tgt, pos).normalize();
+    pos = pos.clone().addScaledVector(dir, -tall * 0.85);
+    fov += tall * 7.5;
+  }
+
+  camera.position.copy(pos);
+  camera.lookAt(tgt);
+  if (Math.abs(camera.fov - fov) > 0.001) { camera.fov = fov; camera.updateProjectionMatrix(); }
+
+  keyLight.intensity = lerp(a.key, b.key, t);
+  coldLight.intensity = lerp(a.cold, b.cold, t);
+  downLight.intensity = lerp(a.down, b.down, t);
+  washLight.intensity = lerp(a.wash, b.wash, t);
+  scene.fog.density = lerp(a.fog, b.fog, t);
+  // the mobile scrim covers more of the frame, so the world needs more light
+  compositeMat.uniforms.exposure.value = lerp(a.exposure, b.exposure, t) * (isMobile ? 1.22 : 1);
+  compositeMat.uniforms.bloomStrength.value = lerp(a.bloom, b.bloom, t);
+
+  const tube = lerp(a.tube, b.tube, t);
+  for (const l of tubeLights) l.intensity = tube;
+  for (const m of tubeMats) m.emissiveIntensity = 0.075 * tube;
+  for (const m of filamentMats) m.opacity = Math.min(0.95, 0.42 + 0.20 * tube);
+}
+
+/* ---------- render loop ---------------------------------------------
+   Reduced motion does not spin a rAF loop: it composes one still frame
+   and redraws only when the story state actually changes.
+   ------------------------------------------------------------------- */
+let last = 0, elapsed = 0, needsRender = true;
+
+function requestStill() {
+  if (!running || !reduceMotion) return;
+  needsRender = true;
+  requestAnimationFrame(frame);
+}
+
+function frame(now) {
+  if (!running) return;
+  const dt = Math.min((now - last) / 1000, 1 / 30);
+  last = now;
+  elapsed += dt;
+
+  rig.smooth = reduceMotion ? rig.exact : damp(rig.smooth, rig.exact, 4.4, dt);
+  applyState(rig.smooth);
+
+  if (!reduceMotion) {
+    const dust = scene.getObjectByName("dust");
+    if (dust) {
+      dust.rotation.y = elapsed * 0.012;
+      dust.position.y = Math.sin(elapsed * 0.22) * 0.03;
+    }
+    const flick = 1 + Math.sin(elapsed * 2.3) * 0.012 + Math.sin(elapsed * 7.1) * 0.006;
+    for (const l of tubeLights) l.intensity *= flick;
+  }
+
+  renderPasses();
+  frameCount++;
+
+  if (reduceMotion) { needsRender = false; return; }   // one composed still
+  requestAnimationFrame(frame);
+}
+let frameCount = 0;
+
+function renderPasses() {
+  // 1. scene → linear HDR target (nothing tone mapped yet)
+  renderer.setRenderTarget(sceneRT);
+  renderer.clear();
+  renderer.render(scene, camera);
+  // renderer.info resets on every render() call, so the world's cost has to
+  // be read here — after the quad passes it only reports the fullscreen quad
+  const sceneTris = renderer.info.render.triangles;
+  const sceneCalls = renderer.info.render.calls;
+
+  // 2. bright pass → half-res
+  const quad = quadScene.children[0];
+  quad.material = brightMat;
+  brightMat.uniforms.tDiffuse.value = sceneRT.texture;
+  renderer.setRenderTarget(brightRT);
+  renderer.render(quadScene, quadCam);
+
+  // 3. separable blur: horizontal then vertical
+  quad.material = blurMat;
+  blurMat.uniforms.tDiffuse.value = brightRT.texture;
+  blurMat.uniforms.dir.value.set(1.0 / brightRT.width, 0);
+  renderer.setRenderTarget(blurRT);
+  renderer.render(quadScene, quadCam);
+
+  blurMat.uniforms.tDiffuse.value = blurRT.texture;
+  blurMat.uniforms.dir.value.set(0, 1.0 / brightRT.height);
+  renderer.setRenderTarget(brightRT);
+  renderer.render(quadScene, quadCam);
+
+  // 4. composite owns exposure, ACES, vignette, grain and the sRGB encode
+  quad.material = compositeMat;
+  compositeMat.uniforms.tScene.value = sceneRT.texture;
+  compositeMat.uniforms.tBloom.value = brightRT.texture;
+  compositeMat.uniforms.time.value = reduceMotion ? 0 : elapsed;
+  renderer.setRenderTarget(null);
+  renderer.render(quadScene, quadCam);
+
+  stats.triangles = sceneTris;
+  stats.calls = sceneCalls;
+}
+
+/* ---------- expose a little state for the test harness -------------- */
+window.YOIN = {
+  get ready() { return running; },
+  get rig() { return { exact: rig.exact, smooth: rig.smooth, index: rig.index }; },
+  get stats() { return { ...stats, dpr }; },
+  get chapters() { return CHAPTERS.length; },
+  get isMobile() { return isMobile; },
+  get camera() {
+    return camera ? {
+      x: +camera.position.x.toFixed(3), y: +camera.position.y.toFixed(3),
+      z: +camera.position.z.toFixed(3), fov: +camera.fov.toFixed(2)
+    } : null;
+  },
+  get fog() { return scene && scene.fog ? +scene.fog.density.toFixed(4) : null; },
+  get lights() {
+    return keyLight ? {
+      key: +keyLight.intensity.toFixed(3),
+      wash: +washLight.intensity.toFixed(3),
+      down: +downLight.intensity.toFixed(3),
+      tube: +tubeLights[0].intensity.toFixed(3),
+      exposure: +compositeMat.uniforms.exposure.value.toFixed(3)
+    } : null;
+  },
+  // Renders synchronously and reads the pixel before the buffer is
+  // presented. The WebGL drawing buffer is cleared after compositing, so
+  // reading it on a later task always returns zeros.
+  readCentrePixel() {
+    if (!renderer) return null;
+    renderPasses();
+    const gl = renderer.getContext();
+    const px = new Uint8Array(4);
+    gl.readPixels(Math.floor(gl.drawingBufferWidth / 2), Math.floor(gl.drawingBufferHeight / 2),
+                  1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    return [px[0], px[1], px[2], px[3]];
+  },
+  measure, applyState
+};
+
+measure();
+onScroll();
+addEventListener("load", () => { measure(); onScroll(); });
+boot();
+</script>
+</body>
+</html>

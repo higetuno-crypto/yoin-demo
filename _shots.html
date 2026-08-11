@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>YOIN — capture harness (desktop)</title>
+<style>
+  body{margin:0;background:#202020;font:11px/1.4 ui-monospace,monospace;color:#bbb;
+       display:flex;flex-direction:column;gap:10px;padding:10px}
+  figure{margin:0}
+  figcaption{padding:3px 0;letter-spacing:.08em}
+  iframe{border:0;display:block;background:#000}
+</style>
+</head>
+<body>
+<figure><figcaption>desktop 1440x860 — chapter 01</figcaption>
+  <iframe src="index.html" width="1440" height="860" data-ch="0"></iframe></figure>
+<figure><figcaption>desktop 1440x860 — chapter 02</figcaption>
+  <iframe src="index.html" width="1440" height="860" data-ch="1"></iframe></figure>
+<figure><figcaption>desktop 1440x860 — chapter 03</figcaption>
+  <iframe src="index.html" width="1440" height="860" data-ch="2"></iframe></figure>
+<script>
+// Each iframe gets its own viewport AND its own WebGL context. Drive the
+// inner document's scroll so the conductor lands on the requested chapter.
+addEventListener("load", () => {
+  for (const fr of document.querySelectorAll("iframe")) {
+    const ch = +fr.dataset.ch;
+    try {
+      const w = fr.contentWindow, d = w.document;
+      if (ch > 0) {
+        const target = d.querySelectorAll(".chapter")[ch];
+        w.scrollTo(0, target.offsetTop + target.offsetHeight / 2 - w.innerHeight / 2);
+      }
+      w.dispatchEvent(new w.Event("scroll"));
+    } catch (e) {
+      document.title = "harness error: " + e.message;
+    }
+  }
+});
+</script>
+</body>
+</html>

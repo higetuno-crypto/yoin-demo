@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>YOIN — capture harness (mobile)</title>
+<style>
+  body{margin:0;background:#202020;font:11px/1.4 ui-monospace,monospace;color:#bbb;
+       display:flex;gap:14px;padding:12px;align-items:flex-start}
+  figure{margin:0}
+  figcaption{padding:3px 0;letter-spacing:.06em}
+  iframe{border:0;display:block;background:#000}
+</style>
+</head>
+<body>
+<figure><figcaption>iPhone 14 — 390x844 — ch01</figcaption>
+  <iframe src="index.html" width="390" height="844" data-ch="0"></iframe></figure>
+<figure><figcaption>iPhone 14 — 390x844 — ch02</figcaption>
+  <iframe src="index.html" width="390" height="844" data-ch="1"></iframe></figure>
+<figure><figcaption>iPhone 14 — 390x844 — ch03</figcaption>
+  <iframe src="index.html" width="390" height="844" data-ch="2"></iframe></figure>
+<figure><figcaption>iPad — 768x1024 — ch01</figcaption>
+  <iframe src="index.html" width="768" height="1024" data-ch="0"></iframe></figure>
+<script>
+addEventListener("load", () => {
+  for (const fr of document.querySelectorAll("iframe")) {
+    const ch = +fr.dataset.ch;
+    try {
+      const w = fr.contentWindow, d = w.document;
+      if (ch > 0) {
+        const t = d.querySelectorAll(".chapter")[ch];
+        w.scrollTo(0, t.offsetTop + t.offsetHeight / 2 - w.innerHeight / 2);
+      }
+      w.dispatchEvent(new w.Event("scroll"));
+    } catch (e) { document.title = "harness error: " + e.message; }
+  }
+});
+</script>
+</body>
+</html>

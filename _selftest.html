@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>YOIN — self test</title>
+<style>
+  body{margin:0;background:#111;color:#ddd;font:12px/1.55 ui-monospace,monospace}
+  #out{padding:14px;white-space:pre}
+  /* The iframe must stay ON SCREEN: Chrome throttles requestAnimationFrame
+     in offscreen frames, so the WebGL world never renders and every visual
+     assertion passes or fails for the wrong reason. */
+  iframe{display:block;width:1280px;height:860px;border:0;background:#000}
+</style>
+</head>
+<body>
+<pre id="out">running...</pre>
+<iframe id="fr" src="index.html"></iframe>
+<script>
+var log = [], pass = 0, fail = 0;
+function ok(n, c, x){ c ? (pass++, log.push("PASS  " + n))
+                        : (fail++, log.push("FAIL  " + n + (x ? "   >> " + x : ""))); }
+function eq(n, got, want){ ok(n, got === want, "got=" + JSON.stringify(got) + " want=" + JSON.stringify(want)); }
+function near(n, got, want, tol){ ok(n, Math.abs(got - want) <= tol,
+  "got=" + got + " want=" + want + " tol=" + tol); }
+function note(s){ log.push("      " + s); }
+
+// `html{scroll-behavior:smooth}` makes scrollTo asynchronous, so reading
+// scrollY on the next line reports the OLD position and the test fails for
+// a reason that has nothing to do with the page. Force an instant jump.
+function scrollToChapter(w, i){
+  var t = w.document.querySelectorAll(".chapter")[i];
+  var y = t.offsetTop + t.offsetHeight / 2 - w.innerHeight / 2;
+  w.scrollTo({ top: y, behavior: "instant" });
+  w.dispatchEvent(new w.Event("scroll"));
+}
+
+function run(w){
+  var d = w.document, Y = w.YOIN;
+
+  /* ---- the world actually booted and rasterised ------------------ */
+  ok("YOIN exposed", !!Y);
+  ok("world running", Y.ready === true);
+  eq("chapter count", Y.chapters, 3);
+  ok("fallback hidden", d.getElementById("fallback").getAttribute("data-on") !== "1");
+
+  var px = Y.readCentrePixel();
+  note("centre pixel = rgba(" + px.join(",") + ")");
+  ok("centre pixel not black", px[0] + px[1] + px[2] > 12, "rgba(" + px.join(",") + ")");
+  note("triangles=" + Y.stats.triangles + "  draw calls=" + Y.stats.calls + "  dpr=" + Y.stats.dpr);
+  ok("draw calls within budget (<=160)", Y.stats.calls <= 160, "calls=" + Y.stats.calls);
+  ok("triangles within budget (<=1.2m)", Y.stats.triangles <= 1200000, "tri=" + Y.stats.triangles);
+  ok("geometry actually drawn", Y.stats.triangles > 500, "tri=" + Y.stats.triangles);
+
+  /* ---- the conductor is deterministic and reversible -------------- */
+  scrollToChapter(w, 0);
+  var atTop = { exact: Y.rig.exact, idx: Y.rig.index };
+  Y.applyState(0); var cam0 = Y.camera, fog0 = Y.fog;
+
+  scrollToChapter(w, 2);
+  var atEnd = { exact: Y.rig.exact, idx: Y.rig.index };
+  Y.applyState(1); var cam1 = Y.camera, fog1 = Y.fog;
+
+  note("ch0 camera " + JSON.stringify(cam0) + " fog=" + fog0);
+  note("ch1 camera " + JSON.stringify(cam1) + " fog=" + fog1);
+
+  eq("chapter index at top", atTop.idx, 0);
+  eq("chapter index at end", atEnd.idx, 2);
+  ok("exact progress advances", atEnd.exact > atTop.exact + 0.5,
+     "top=" + atTop.exact + " end=" + atEnd.exact);
+  ok("camera actually moves between chapters",
+     Math.abs(cam1.z - cam0.z) > 0.5, "dz=" + (cam1.z - cam0.z));
+  ok("fov differs between chapters", cam0.fov !== cam1.fov, cam0.fov + " vs " + cam1.fov);
+  ok("fog thickens toward chapter 2", fog1 > fog0, fog0 + " -> " + fog1);
+
+  // reverse: the same position must reproduce the same state
+  scrollToChapter(w, 0);
+  var back = { exact: Y.rig.exact, idx: Y.rig.index };
+  Y.applyState(0); var cam0b = Y.camera, fog0b = Y.fog;
+  near("reverse scroll reproduces exact progress", back.exact, atTop.exact, 0.001);
+  eq("reverse scroll reproduces chapter index", back.idx, atTop.idx);
+  eq("reverse scroll reproduces camera x", cam0b.x, cam0.x);
+  eq("reverse scroll reproduces camera z", cam0b.z, cam0.z);
+  eq("reverse scroll reproduces fog", fog0b, fog0);
+
+  // a mid-segment position must be strictly between the endpoints
+  Y.applyState(0.5);
+  var mid = Y.camera, midFog = Y.fog;
+  ok("mid-segment camera lies between endpoints",
+     (mid.z - cam0.z) * (mid.z - cam1.z) < 0, "mid z=" + mid.z);
+  ok("mid-segment fog lies between endpoints",
+     midFog > fog0 && midFog < fog1, "mid fog=" + midFog);
+
+  /* ---- the closing chapter really does go dark -------------------- */
+  Y.applyState(0); var L0 = Y.lights;
+  Y.applyState(2); var L2 = Y.lights;
+  note("ch0 lights " + JSON.stringify(L0));
+  note("ch3 lights " + JSON.stringify(L2));
+  ok("room lighting falls away by the last chapter",
+     L2.key < L0.key * 0.2 && L2.wash < 0.5 && L2.down < 0.5,
+     JSON.stringify(L2));
+  ok("the valves are the only thing left burning", L2.tube > L0.tube * 1.5,
+     "ch0=" + L0.tube + " ch3=" + L2.tube);
+  ok("exposure opens to hold the dark frame", L2.exposure > L0.exposure,
+     L0.exposure + " -> " + L2.exposure);
+  Y.applyState(0);
+
+  /* ---- DOM story stays semantic and accessible ------------------- */
+  var h1 = d.querySelector("h1");
+  eq("h1 count", d.querySelectorAll("h1").length, 1);
+  eq("h1 accessible label preserved", h1.getAttribute("aria-label"), "Where the sound stops");
+  ok("split words are hidden from AT",
+     h1.querySelector("span[aria-hidden='true']") !== null);
+  ok("split produced word spans", h1.querySelectorAll(".w").length >= 3,
+     "words=" + h1.querySelectorAll(".w").length);
+  eq("chapter sections", d.querySelectorAll(".chapter").length, 3);
+  eq("nav links match chapters", d.querySelectorAll("[data-nav]").length, 3);
+  eq("rail buttons match chapters", d.querySelectorAll("[data-rail]").length, 3);
+  eq("vertical type panels match chapters", d.querySelectorAll("[data-vert]").length, 3);
+  ok("footer present and reachable", !!d.querySelector("footer#colophon"));
+  ok("footer has a real link", !!d.querySelector("footer a[href^='https://']"));
+  ok("canvas hidden from AT", d.getElementById("world").getAttribute("aria-hidden") === "true");
+  ok("nav marks the active chapter",
+     d.querySelector("[data-nav='1']").getAttribute("aria-current") === "true" ||
+     d.querySelector("[data-nav='0']").getAttribute("aria-current") === "true");
+
+  /* ---- claims made in the page must stay true -------------------- */
+  var html = d.documentElement.outerHTML;
+  ok("no GLTF/GLB loader anywhere (the page claims no 3D models)",
+     !/GLTFLoader|\.glb\b|\.gltf\b/.test(html));
+  ok("no remote asset origins", !/https?:\/\/(?!github\.com)[^"')\s]+\.(js|css|png|jpg|webp|woff2?)/.test(html));
+  ok("three is loaded from a relative vendor path", /\.\/vendor\/three\.module\.min\.js/.test(html));
+
+  return null;   // the rail test finishes asynchronously
+}
+
+// The rail uses scrollIntoView({behavior:"smooth"}), which is async however
+// the CSS is set, so this assertion has to wait for the animation.
+function railTest(w, done){
+  var d = w.document;
+  scrollToChapter(w, 0);
+  var before = w.scrollY;
+  d.querySelector("[data-rail='2']").click();
+  setTimeout(function(){
+    ok("chapter rail scrolls the document", w.scrollY > before,
+       "before=" + before + " after=" + w.scrollY);
+    eq("chapter rail lands on the last chapter", w.YOIN.rig.index, 2);
+    done();
+  }, 900);
+}
+
+function report(){
+  document.getElementById("out").textContent =
+    log.join("\n") + "\n\n==== PASS " + pass + " / FAIL " + fail + " ====";
+}
+
+var tries = 0;
+function attempt(){
+  var w = document.getElementById("fr").contentWindow;
+  if ((!w.YOIN || !w.YOIN.ready) && tries++ < 60) { return setTimeout(attempt, 120); }
+  try { run(w); railTest(w, report); }
+  catch (e) { document.getElementById("out").textContent =
+    log.join("\n") + "\n\nERROR: " + e.message + "\n" + (e.stack || ""); }
+}
+addEventListener("load", function(){ setTimeout(attempt, 400); });
+</script>
+</body>
+</html>
