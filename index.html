@@ -130,10 +130,14 @@
     font-family:var(--mincho);
     font-size:clamp(30px,5.4vw,74px);line-height:1.16;letter-spacing:.14em;
     color:var(--bone);opacity:0;
-    transition:opacity 1.1s;
+    /* it settles in rather than simply appearing: a pure opacity fade on
+       type this large reads as a pop, however long the duration */
+    transform:translateY(-16px);
+    transition:opacity 1.15s cubic-bezier(.2,.7,.25,1),
+               transform 1.15s cubic-bezier(.2,.7,.25,1);
     text-shadow:0 0 34px rgba(0,0,0,.85);
   }
-  .vert[data-on="1"]{opacity:.9}
+  .vert[data-on="1"]{opacity:.9;transform:none}
   .vert.v-a{right:clamp(58px,7vw,120px);top:16vh}
   .vert.v-b{right:clamp(58px,7vw,120px);bottom:11vh;font-size:clamp(22px,3.2vw,44px);color:var(--amber-dim);opacity:0}
   .vert.v-b[data-on="1"]{opacity:.82}
@@ -164,8 +168,23 @@
 
   @media (max-width:860px){
     .copy{max-width:none}
-    .vert.v-a{font-size:clamp(26px,7vw,44px);right:18px;top:11vh}
-    .vert.v-b{display:none}
+    /* All three chapters put their vertical word in the SAME slot on a
+       phone, so the eye learns where to look. v-b used to be display:none
+       here — chapter 02 had no vertical word at all, which is why chapter
+       03's arrived out of nowhere. v-c was added after this block was
+       written and never got a mobile rule. */
+    /* and it sits BEHIND the copy. The body text is full width on a phone,
+       so a fixed column of type on the right will collide with it at some
+       scroll position no matter where it is placed — moving it only changes
+       which paragraph it lands on. Demoting it below .shell turns the
+       overlap into intentional layering instead of two texts fighting. */
+    .vert{z-index:1;opacity:0}
+    .vert[data-on="1"]{opacity:.34}
+    .vert.v-a{right:14px;top:9vh;font-size:clamp(30px,9vw,56px)}
+    .vert.v-b{right:14px;top:9vh;bottom:auto;font-size:clamp(24px,7vw,42px)}
+    .vert.v-b[data-on="1"]{opacity:.32}
+    .vert.v-c{right:14px;top:9vh;font-size:clamp(26px,7.6vw,46px)}
+    .vert.v-c[data-on="1"]{opacity:.36}
     .rail{display:none}
     /* On mobile the copy sits at the TOP, so the scrim has to be dark there
        and clear below — otherwise the darkest part of the page covers the
@@ -176,7 +195,7 @@
   @media (prefers-reduced-motion:reduce){
     html{scroll-behavior:auto}
     h1 .w>i,h2 .w>i,.lede,.spec{transition:none;transform:none;opacity:1}
-    .vert{transition:none}
+    .vert{transition:none;transform:none}
   }
   .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 </style>
@@ -854,8 +873,14 @@ function buildWorld() {
      filament. Building it as a glowing cylinder — and putting the point
      light inside the envelope, where inverse-square blows the inner wall
      out — reads as a candle instead. The light sits clear of the glass. */
-  for (const sx of [-1, 1]) for (const [dz, r, h] of [[0.03, 0.031, 0.115], [-0.02, 0.021, 0.075]]) {
-    const y0 = 0.068, X = sx * 0.115;
+  // Spread across the chassis rather than stacked front-to-back. Sitting one
+  // behind the other at the same x made the small valve disappear into the
+  // large one from every authored camera.
+  for (const [X, dz, r, h] of [
+    [-0.152, 0.010, 0.031, 0.115], [0.152, 0.010, 0.031, 0.115],
+    [-0.058, -0.030, 0.021, 0.075], [0.058, -0.030, 0.021, 0.075]
+  ]) {
+    const y0 = 0.068;
 
     const base = cyl(r + 0.005, r + 0.007, 0.018, 20, M.dark);
     base.position.set(X, 0.061, dz);
@@ -863,18 +888,32 @@ function buildWorld() {
     // (the valve's base pins are omitted: they sit under the socket and are
     //  never visible from any authored camera, but cost 8 draw calls each)
 
-    const plate = box(r * 1.10, h * 0.44, r * 0.92, M.dark);
-    plate.position.set(X, y0 + h * 0.50, dz);
+    // a cylinder, not a box: through the envelope a box shows four hard
+    // vertical edges and reads as a carton inside a jar
+    const plate = cyl(r * 0.66, r * 0.66, h * 0.42, 14, M.dark);
+    plate.position.set(X, y0 + h * 0.57, dz);
     amp.add(plate);
+    const mica = cyl(r * 0.80, r * 0.80, 0.0025, 14, M.dark);   // spacer discs
+    mica.position.set(X, y0 + h * 0.79, dz);
+    amp.add(mica);
     const getter = cyl(r * 0.55, r * 0.55, 0.004, 12, M.chrome);   // the mirror ring at the top
     getter.position.set(X, y0 + h * 0.86, dz);
     amp.add(getter);
 
-    const filMat = new THREE.MeshBasicMaterial({ color: 0xffa445, transparent: true, opacity: 0.7 });
+    // The filament is OPAQUE and emissive rather than a translucent sprite.
+    // A transparent mesh sitting inside two other transparent meshes gets
+    // re-sorted every time the camera moves, which reads as flicker while
+    // scrolling. Emissive intensity above 1 is what makes it bloom; a plain
+    // colour is clamped to 1 and would never cross the bright-pass threshold.
+    const filMat = new THREE.MeshStandardMaterial({
+      color: 0x000000, roughness: 1.0, metalness: 0.0,
+      emissive: new THREE.Color(0xff9a3c), emissiveIntensity: 2.0
+    });
     filamentMats.push(filMat);
-    const fil = cyl(r * 0.10, r * 0.10, h * 0.38, 6, filMat);
-    fil.position.set(X, y0 + h * 0.30, dz);
-    fil.renderOrder = 1;
+    // sized so a clear span of it shows BELOW the plate; fully enclosed, the
+    // only glowing part of the valve is invisible and the envelope reads empty
+    const fil = cyl(r * 0.17, r * 0.17, h * 0.44, 8, filMat);
+    fil.position.set(X, y0 + h * 0.26, dz);
     amp.add(fil);
 
     const glassMat = new THREE.MeshStandardMaterial({
@@ -883,15 +922,20 @@ function buildWorld() {
       emissive: new THREE.Color(0xff8c2e), emissiveIntensity: 0.10
     });
     tubeMats.push(glassMat);
-    const glass = cyl(r, r * 0.94, h, 20, glassMat);
-    glass.position.set(X, y0 + h / 2, dz);
+    // One lathed envelope instead of a cylinder plus a separate dome: the
+    // two used to overlap at the shoulder, leaving a seam whose sort order
+    // flipped as the camera moved. One mesh cannot fight itself.
+    const prof = [new THREE.Vector2(r * 0.94, 0), new THREE.Vector2(r, h * 0.10)];
+    const SHOULDER = h * 0.78;
+    prof.push(new THREE.Vector2(r, SHOULDER));
+    for (let k = 1; k <= 8; k++) {
+      const a = (k / 8) * Math.PI / 2;
+      prof.push(new THREE.Vector2(r * Math.cos(a), SHOULDER + Math.sin(a) * r));
+    }
+    const glass = new THREE.Mesh(new THREE.LatheGeometry(prof, 22), glassMat);
+    glass.position.set(X, y0, dz);
     glass.renderOrder = 3;
     amp.add(glass);
-    const dome = new THREE.Mesh(
-      new THREE.SphereGeometry(r * 0.94, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), glassMat);
-    dome.position.set(X, y0 + h, dz);
-    dome.renderOrder = 3;
-    amp.add(dome);
 
     // decay 1.5, not 2: a physically exact falloff puts ~100x the irradiance
     // on the chassis 0.1 m away and the close chapter blows out to white
@@ -1065,7 +1109,12 @@ function buildWorld() {
 
 function buildPost() {
   const type = renderer.capabilities.isWebGL2 ? THREE.HalfFloatType : THREE.UnsignedByteType;
-  const opts = { type, colorSpace: THREE.NoColorSpace, depthBuffer: true, stencilBuffer: false };
+  // MSAA on the scene target. Without it, thin bright geometry (the valve
+  // filaments are ~3 px across) crawls and sparkles as the camera moves,
+  // because the renderer's own `antialias` option does nothing when the
+  // scene is drawn into a render target rather than the canvas.
+  const samples = renderer.capabilities.isWebGL2 ? (isMobile ? 2 : 4) : 0;
+  const opts = { type, colorSpace: THREE.NoColorSpace, depthBuffer: true, stencilBuffer: false, samples };
   sceneRT = new THREE.WebGLRenderTarget(2, 2, opts);
   brightRT = new THREE.WebGLRenderTarget(2, 2, { type, colorSpace: THREE.NoColorSpace, depthBuffer: false, stencilBuffer: false });
   blurRT   = new THREE.WebGLRenderTarget(2, 2, { type, colorSpace: THREE.NoColorSpace, depthBuffer: false, stencilBuffer: false });
@@ -1077,7 +1126,9 @@ function buildPost() {
 
   brightMat = new THREE.ShaderMaterial({
     vertexShader: QUAD_VERT, fragmentShader: BRIGHT_FRAG,
-    uniforms: { tDiffuse: { value: null }, threshold: { value: 0.90 }, knee: { value: 0.26 } },
+    // a wide knee: a narrow one makes pixels pop in and out of the bloom as
+    // they cross the threshold, which is its own source of scroll flicker
+    uniforms: { tDiffuse: { value: null }, threshold: { value: 0.82 }, knee: { value: 0.55 } },
     depthTest: false, depthWrite: false
   });
   blurMat = new THREE.ShaderMaterial({
@@ -1185,7 +1236,7 @@ function applyState(p, immediate) {
   const tube = lerp(a.tube, b.tube, t);
   for (const l of tubeLights) l.intensity = tube;
   for (const m of tubeMats) m.emissiveIntensity = 0.075 * tube;
-  for (const m of filamentMats) m.opacity = Math.min(0.95, 0.42 + 0.20 * tube);
+  for (const m of filamentMats) m.emissiveIntensity = 1.45 + 1.30 * tube;
 }
 
 /* ---------- render loop ---------------------------------------------
