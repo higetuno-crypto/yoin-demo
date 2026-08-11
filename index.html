@@ -96,10 +96,16 @@
     font-weight:400;margin:0 0 26px;
     font-size:clamp(38px,7.4vw,92px);line-height:.98;letter-spacing:-.022em;
   }
-  h1 .w,h2 .w{display:inline-block;overflow:hidden;vertical-align:bottom}
+  /* The reveal mask has to clip BELOW the baseline, or `overflow:hidden`
+     cuts the tail off every descender — the g in "signal" was flat. The
+     padding lowers the clip line and the negative margin keeps the metrics. */
+  h1 .w,h2 .w{
+    display:inline-block;overflow:hidden;vertical-align:bottom;
+    padding-bottom:.17em;margin-bottom:-.17em;
+  }
   h1 .w>i,h2 .w>i{
     display:inline-block;font-style:normal;
-    transform:translateY(105%);opacity:0;
+    transform:translateY(128%);opacity:0;   /* clears the taller mask */
     transition:transform .82s cubic-bezier(.16,.84,.3,1),opacity .82s;
   }
   .chapter[data-in="1"] h1 .w>i,.chapter[data-in="1"] h2 .w>i{transform:translateY(0);opacity:1}
@@ -178,13 +184,17 @@
        scroll position no matter where it is placed — moving it only changes
        which paragraph it lands on. Demoting it below .shell turns the
        overlap into intentional layering instead of two texts fighting. */
-    .vert{z-index:1;opacity:0}
-    .vert[data-on="1"]{opacity:.34}
+       Colour matters more than z-index here. Sitting a layer below the copy
+       is not enough while the type is saturated amber and the body text is
+       a desaturated grey: warm advances, grey recedes, so it still read as
+       the nearer of the two. On a phone it takes the wall's own colour. */
+    .vert{z-index:1;opacity:0;color:#7d6a52}
+    .vert[data-on="1"]{opacity:.46}
     .vert.v-a{right:14px;top:9vh;font-size:clamp(30px,9vw,56px)}
-    .vert.v-b{right:14px;top:9vh;bottom:auto;font-size:clamp(24px,7vw,42px)}
-    .vert.v-b[data-on="1"]{opacity:.32}
-    .vert.v-c{right:14px;top:9vh;font-size:clamp(26px,7.6vw,46px)}
-    .vert.v-c[data-on="1"]{opacity:.36}
+    .vert.v-b{right:14px;top:9vh;bottom:auto;color:#7d6a52;font-size:clamp(24px,7vw,42px)}
+    .vert.v-b[data-on="1"]{opacity:.44}
+    .vert.v-c{right:14px;top:9vh;color:#826f55;font-size:clamp(21px,6vw,36px)}
+    .vert.v-c[data-on="1"]{opacity:.48}
     .rail{display:none}
     /* On mobile the copy sits at the TOP, so the scrim has to be dark there
        and clear below — otherwise the darkest part of the page covers the
@@ -210,7 +220,7 @@
 
 <p class="vert v-a" aria-hidden="true" data-vert="0">余韻</p>
 <p class="vert v-b" aria-hidden="true" data-vert="1">鳴り止んだ後</p>
-<p class="vert v-c" aria-hidden="true" data-vert="2">まだ冷めない</p>
+<p class="vert v-c" aria-hidden="true" data-vert="2">消えたのは音だけ</p>
 
 <header>
   <a class="brand" href="#top">YOIN<span>.</span></a>
@@ -327,7 +337,7 @@ const CHAPTERS = [
       // aimed ABOVE the subject so it sits low in the frame, clear of the copy
       mobile: { position: [-0.82, 1.10, 1.30], target: [0.38, 1.32, -2.42], fov: 56 }
     },
-    world: { key: 2.30, cold: 24, down: 11, wash: 19, tube: 0.42, fog: 0.062, exposure: 1.05, bloom: 0.42 }
+    world: { key: 2.30, cold: 24, down: 11, wash: 19, tube: 0.80, fog: 0.062, exposure: 1.05, bloom: 0.42 }
   },
   {
     id: "amp",
@@ -335,7 +345,7 @@ const CHAPTERS = [
       position: [-0.36, 0.88, -1.02], target: [0.02, 0.585, -2.44], fov: 30,
       mobile: { position: [-0.26, 0.96, -0.78], target: [0.02, 0.860, -2.44], fov: 40 }
     },
-    world: { key: 1.20, cold: 10, down: 5, wash: 5, tube: 0.55, fog: 0.100, exposure: 0.80, bloom: 0.40 }
+    world: { key: 1.20, cold: 10, down: 5, wash: 5, tube: 1.00, fog: 0.100, exposure: 0.80, bloom: 0.40 }
   },
   {
     // The payoff: the room's lights fall away and only the valves, still
@@ -346,7 +356,7 @@ const CHAPTERS = [
       position: [-0.88, 0.90, 1.66], target: [0.26, 0.56, -2.42], fov: 33,
       mobile: { position: [-0.58, 0.96, 2.05], target: [0.32, 1.10, -2.42], fov: 48 }
     },
-    world: { key: 0.08, cold: 3.5, down: 0, wash: 0, tube: 0.85, fog: 0.150, exposure: 1.60, bloom: 1.15 }
+    world: { key: 0.08, cold: 3.5, down: 0, wash: 0, tube: 1.45, fog: 0.150, exposure: 1.60, bloom: 1.15 }
   }
 ];
 
@@ -1235,8 +1245,8 @@ function applyState(p, immediate) {
 
   const tube = lerp(a.tube, b.tube, t);
   for (const l of tubeLights) l.intensity = tube;
-  for (const m of tubeMats) m.emissiveIntensity = 0.075 * tube;
-  for (const m of filamentMats) m.emissiveIntensity = 1.45 + 1.30 * tube;
+  for (const m of tubeMats) m.emissiveIntensity = 0.115 * tube;
+  for (const m of filamentMats) m.emissiveIntensity = 2.30 + 1.60 * tube;
 }
 
 /* ---------- render loop ---------------------------------------------
